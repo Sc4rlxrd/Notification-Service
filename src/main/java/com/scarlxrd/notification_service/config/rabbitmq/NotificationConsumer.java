@@ -1,22 +1,26 @@
 package com.scarlxrd.notification_service.config.rabbitmq;
 
-import com.scarlxrd.notification_service.dto.ClientCreatedEvent;
-import com.scarlxrd.notification_service.service.TelegramService;
+import com.scarlxrd.notification_service.dto.NotificationPayload;
+import com.scarlxrd.notification_service.service.NotificationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 
+
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class NotificationConsumer {
 
-    private final TelegramService telegramService;
+    private final NotificationService notificationService;
 
-    @RabbitListener(queues = "client.book.queue")
-    public void receive(ClientCreatedEvent event) {
+    @RabbitListener(queues = "notification.client.created.queue")
+    public void receive(NotificationPayload payload) {
 
-        telegramService.sendClientCreated(event);
+        log.info("Evento recebido para notificação: {}", payload);
 
+        notificationService.process(payload);
     }
 
 }
