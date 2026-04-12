@@ -22,24 +22,20 @@ public class TelegramSender implements NotificationSender {
     private final RestTemplate restTemplate = new RestTemplate();
 
     @Override
-    public void send(NotificationPayload payload) {
-
-        String message = """
-        📘 Novo cliente registrado
-
-        CPF: %s
-        Nome: %s
-        """.formatted(payload.getCpf(), payload.getName());
-
+    public void send(String message) {
         String url = "https://api.telegram.org/bot" + token + "/sendMessage";
 
         Map<String, Object> body = Map.of(
                 "chat_id", chatId,
-                "text", message
+                "text", message,
+                "parse_mode", "Markdown"
         );
 
-        restTemplate.postForObject(url, body, String.class);
-
-        log.info("Notificação enviada para Telegram");
+        try {
+            restTemplate.postForObject(url, body, String.class);
+            log.info("Notificação enviada para Telegram com sucesso");
+        } catch (Exception e) {
+            log.error("Erro ao enviar para o Telegram: {}", e.getMessage());
+        }
     }
 }
