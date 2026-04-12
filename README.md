@@ -10,21 +10,17 @@ Parte do ecossistema da **Book API**, utilizando uma arquitetura **Event-Driven*
 
 ---
 
-# 📚 Sobre o Projeto
+## 📚 Sobre o Projeto
 
 O **Notification Service** escuta eventos publicados pela API principal e envia notificações automaticamente para um bot do Telegram.
 
-Quando um cliente é criado na API principal, um evento é publicado no RabbitMQ com a routing key:
-
-```
-client.created.notify
-```
+Quando um pedido é criado ou atualizado na API principal, um evento é publicado no RabbitMQ com a routing key apropriada.
 
 Esse serviço consome o evento e envia uma mensagem para o Telegram.
 
 ---
 
-# 🏗 Arquitetura
+## 🏗 Arquitetura
 
 ```
 Book API
@@ -33,9 +29,9 @@ Book API
    ▼
 RabbitMQ (exchange: book.events)
    │
-   │ routing key: client.created.notify
+   │ routing key: order.created.notify / payment.updated.notify
    ▼
-notification.client.created.queue
+notification.order.queue
    │
    ▼
 Notification Service
@@ -49,10 +45,10 @@ Mensagem enviada no Telegram
 
 ---
 
-# ⚙️ Tecnologias
+## ⚙️ Tecnologias
 
 - Java 21
-- Spring Boot
+- Spring Boot 4.0.3
 - RabbitMQ
 - Spring AMQP
 - Maven
@@ -61,7 +57,7 @@ Mensagem enviada no Telegram
 
 ---
 
-# 📁 Estrutura do Projeto
+## 📁 Estrutura do Projeto
 
 ```
 src/main/java/com/scarlxrd/notification_service
@@ -88,38 +84,40 @@ src/main/java/com/scarlxrd/notification_service
 
 ---
 
-# 🐇 RabbitMQ Topology
+## 🐇 RabbitMQ Topology
 
 A API principal cria a seguinte infraestrutura no RabbitMQ.
 
-## Exchanges
+### Exchanges
 
 ```
 book.events
 book.events.dlx
 ```
 
-## Filas
+### Filas
 
 ```
-client.book.queue
-client.book.queue.retry
-client.book.queue.dlq
-notification.client.created.queue
+order.book.queue
+order.book.queue.retry
+order.book.queue.dlq
+notification.order.queue
 ```
 
-## Routing Keys
+### Routing Keys
 
 ```
-client.created
-client.retry
-client.created.dlq
-client.created.notify
+order.created
+payment.updated
+order.retry
+order.dlq
+order.created.notify
+payment.updated.notify
 ```
 
 ---
 
-# 📩 Evento Consumido
+## 📩 Evento Consumido
 
 Exchange:
 
@@ -130,48 +128,70 @@ book.events
 Routing Key:
 
 ```
-client.created.notify
+order.created.notify
+payment.updated.notify
 ```
 
 Fila:
 
 ```
-notification.client.created.queue
+notification.order.queue
 ```
 
 ---
 
-# 📦 Exemplo de Evento
+## 📦 Exemplo de Evento
 
-Mensagem enviada pela API principal:
+Mensagem enviada pela API principal para novo pedido:
 
 ```json
 {
-  "eventType": "CLIENT_CREATED",
-  "cpf": "477.946.290-80",
-  "name": "Nico"
+  "orderId": "uuid-do-pedido",
+  "amount": 100.00,
+  "customerEmail": "cliente@email.com",
+  "customerName": "Nome do Cliente"
+}
+```
+
+Para atualização de pagamento:
+
+```json
+{
+  "orderId": "uuid-do-pedido",
+  "amount": 100.00,
+  "status": "SUCCESS"
 }
 ```
 
 ---
 
-# 📲 Exemplo de Notificação
+## 📲 Exemplo de Notificação
 
-Mensagem enviada pelo bot do Telegram:
+Mensagem enviada pelo bot do Telegram para novo pedido:
 
 ```
-📚 Novo cliente cadastrado
+📘 *NOVO PEDIDO REGISTRADO*
 
-Nome: Nico
-CPF: 477.946.290-80
-Evento: CLIENT_CREATED
+*ID:* uuid-do-pedido
+*E-mail:* cliente@email.com
+*Total:* R$ 100.00
+```
+
+Para atualização de pagamento aprovado:
+
+```
+💳 *ATUALIZAÇÃO DE PAGAMENTO*
+
+*Pedido:* uuid-do-pedido
+*Status:* ✅ APROVADO
+*Valor:* R$ 100.00
 ```
 
 ---
 
-# ⚙️ Configuração
+## ⚙️ Configuração
 
-Exemplo do `application.yaml`
+Exemplo do `application.yaml`:
 
 ```yaml
 spring:
@@ -189,7 +209,7 @@ telegram:
 
 ---
 
-# ▶ Executando o Projeto
+## ▶ Executando o Projeto
 
 ### 1️⃣ Subir RabbitMQ
 
@@ -212,39 +232,28 @@ http://localhost:15672
 
 ### 2️⃣ Executar aplicação
 
-```
+```bash
 ./mvnw spring-boot:run
 ```
 
 ou
 
-```
+```bash
 mvn spring-boot:run
 ```
 
 ---
 
-# 🧪 Fluxo de Funcionamento
+## 🧪 Fluxo de Funcionamento
 
-1️⃣ Cliente criado na API principal  
+1️⃣ Pedido criado ou pagamento atualizado na API principal  
 2️⃣ Evento publicado no RabbitMQ  
 3️⃣ Notification Service consome o evento  
 4️⃣ Telegram recebe a mensagem  
 
----
-
-# 🚀 Melhorias Futuras
-
-- Retry para falha no envio de notificação
-- Suporte a múltiplos canais de notificação
-
-Exemplos:
-
-- Email
-- Slack
 
 ---
 
-# 👨‍💻 Autor
+## 👨‍💻 Autor
 
 Desenvolvido por **Guilherme Dos Santos**
