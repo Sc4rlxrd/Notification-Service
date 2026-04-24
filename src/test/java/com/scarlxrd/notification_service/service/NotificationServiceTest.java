@@ -1,6 +1,7 @@
 package com.scarlxrd.notification_service.service;
 
 import com.scarlxrd.notification_service.dto.NotificationPayload;
+import com.scarlxrd.notification_service.impl.IdempotencyService;
 import com.scarlxrd.notification_service.impl.NotificationSender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -25,6 +26,9 @@ class NotificationServiceTest {
     @Mock
     private NotificationSender telegramSender;
 
+    @Mock
+    private IdempotencyService idempotencyService;
+
     @InjectMocks
     private NotificationService notificationService;
 
@@ -34,6 +38,9 @@ class NotificationServiceTest {
     void setUp() {
         payload = new NotificationPayload();
         payload.setOrderId(UUID.randomUUID());
+
+        lenient().when(idempotencyService.isDuplicate(any(), any(), any()))
+                .thenReturn(false);
     }
 
     @Nested
@@ -170,6 +177,25 @@ class NotificationServiceTest {
             verify(telegramSender).send(captor.capture());
 
             assertThat(captor.getValue()).contains("Calculando...");
+        }
+    }
+
+    @Nested
+    @DisplayName("Idempotência")
+    class IdempotencyTests {
+
+        @Test
+        @DisplayName("Deve ignorar evento duplicado")
+        void shouldIgnoreDuplicateEvent() {
+            payload.setStatus("SUCCESS");
+            payload.setAmount(new BigDecimal("100"));
+
+            when(idempotencyService.isDuplicate(any(), any(), any()))
+                    .thenReturn(true);
+
+            notificationService.process(payload);
+
+            verify(telegramSender, never()).send(any());
         }
     }
 }

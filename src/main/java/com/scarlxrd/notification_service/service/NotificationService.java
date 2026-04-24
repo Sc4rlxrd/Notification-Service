@@ -24,12 +24,6 @@ public class NotificationService {
             log.info("Ignorando evento intermediário sem dados de contato");
             return;
         }
-
-        if (payload.getStatus() == null && (payload.getAmount() == null || payload.getAmount().compareTo(BigDecimal.ZERO) <= 0)) {
-            log.info("Aguardando validação completa do pedido {} para notificar.", payload.getOrderId());
-            return;
-        }
-
         String context;
         String key;
 
