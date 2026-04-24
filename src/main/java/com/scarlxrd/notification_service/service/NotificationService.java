@@ -2,12 +2,14 @@ package com.scarlxrd.notification_service.service;
 
 
 import com.scarlxrd.notification_service.dto.NotificationPayload;
+import com.scarlxrd.notification_service.impl.IdempotencyService;
 import com.scarlxrd.notification_service.impl.NotificationSender;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 
 @Service
 @RequiredArgsConstructor
@@ -15,10 +17,38 @@ import java.math.BigDecimal;
 public class NotificationService {
 
     private final NotificationSender telegramSender;
+    private final IdempotencyService idempotencyService;
 
     public void process(NotificationPayload payload) {
         if (payload.getCustomerEmail() == null && payload.getStatus() == null) {
             log.info("Ignorando evento intermediário sem dados de contato");
+            return;
+        }
+
+        if (payload.getStatus() == null && (payload.getAmount() == null || payload.getAmount().compareTo(BigDecimal.ZERO) <= 0)) {
+            log.info("Aguardando validação completa do pedido {} para notificar.", payload.getOrderId());
+            return;
+        }
+
+        String context;
+        String key;
+
+        if (payload.getStatus() != null) {
+            context = "payment";
+            key = payload.getOrderId() + ":" + payload.getStatus();
+        } else {
+            context = "order";
+            key = payload.getOrderId().toString();
+        }
+
+        boolean duplicate = idempotencyService.isDuplicate(
+                context,
+                key,
+                Duration.ofMinutes(5)
+        );
+
+        if (duplicate) {
+            log.warn("Evento duplicado ignorado: {}", key);
             return;
         }
 
