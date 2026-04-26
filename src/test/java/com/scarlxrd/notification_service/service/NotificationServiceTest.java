@@ -14,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -196,6 +197,58 @@ class NotificationServiceTest {
             notificationService.process(payload);
 
             verify(telegramSender, never()).send(any());
+        }
+
+        @Test
+        @DisplayName("Deve usar chave correta para pagamento")
+        void shouldUseCorrectKeyForPayment() {
+            // Given
+            payload.setStatus("SUCCESS");
+            payload.setAmount(new BigDecimal("180.00"));
+
+            // When
+            notificationService.process(payload);
+
+            // Then
+            verify(idempotencyService).isDuplicate(
+                    eq("payment"),
+                    eq(payload.getOrderId() + ":SUCCESS"),
+                    any()
+            );
+        }
+
+        @Test
+        @DisplayName("Deve usar chave correta para pedido")
+        void shouldUseCorrectKeyForOrder() {
+            // Given
+            payload.setCustomerEmail("cliente@teste.com");
+
+            // When
+            notificationService.process(payload);
+
+            // Then
+            verify(idempotencyService).isDuplicate(
+                    eq("order"),
+                    eq(payload.getOrderId().toString()),
+                    any()
+            );
+        }
+
+        @Test
+        @DisplayName("Deve chamar idempotencyService com TTL de 5 minutos")
+        void shouldCallIdempotencyWithCorrectTtl() {
+            // Given
+            payload.setStatus("SUCCESS");
+
+            // When
+            notificationService.process(payload);
+
+            // Then
+            verify(idempotencyService).isDuplicate(
+                    any(),
+                    any(),
+                    eq(Duration.ofMinutes(5))
+            );
         }
     }
 }
