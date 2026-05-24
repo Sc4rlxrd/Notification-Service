@@ -1,6 +1,5 @@
 package com.scarlxrd.notification_service.sender;
 
-import com.scarlxrd.notification_service.dto.NotificationPayload;
 import com.scarlxrd.notification_service.impl.NotificationSender;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +45,7 @@ public class TelegramSender implements NotificationSender {
             log.info("Notificação enviada para Telegram com sucesso");
         } catch (Exception e) {
             log.error("Erro ao enviar para o Telegram: {}", e.getMessage());
+            throw e;
         }
     }
     @Recover
