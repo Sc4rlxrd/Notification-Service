@@ -15,7 +15,10 @@ public class NotificationConsumer {
 
     private final NotificationService notificationService;
 
-    @RabbitListener(queues = "notification.order.queue")
+    @RabbitListener(
+            queues = "notification.order.queue",
+            containerFactory = "rabbitListenerContainerFactory"
+    )
     public void receive(NotificationPayload payload) {
 
         log.info("Evento recebido para notificação: {}", payload);
