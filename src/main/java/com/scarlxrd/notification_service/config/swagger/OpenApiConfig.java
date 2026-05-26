@@ -8,9 +8,12 @@ import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import io.swagger.v3.oas.models.servers.Server;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import java.util.List;
 
 @Configuration
 public class OpenApiConfig {
@@ -18,6 +21,7 @@ public class OpenApiConfig {
     @Bean
     public OpenAPI customOpenAPI(@Value("${app.gateway-url:http://localhost:8080}") String gatewayUrl) {
         return new OpenAPI()
+                .servers(buildServers(gatewayUrl))
                 .info(buildInfo())
                 .addSecurityItem(new SecurityRequirement().addList("bearerAuth"))
                 .components(buildComponents())
@@ -25,6 +29,15 @@ public class OpenApiConfig {
                         .description("Repositório do projeto")
                         .url("https://github.com/Sc4rlxrd/Notification-Service"));
     }
+
+    private List<Server> buildServers(String gatewayUrl) {
+        return List.of(
+                new Server()
+                        .url(gatewayUrl)
+                        .description("Gateway")
+        );
+    }
+
 
     private Info buildInfo() {
         return new Info()
