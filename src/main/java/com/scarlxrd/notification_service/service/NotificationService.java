@@ -1,6 +1,7 @@
 package com.scarlxrd.notification_service.service;
 
 
+import com.scarlxrd.notification_service.config.metrics.NotificationMetrics;
 import com.scarlxrd.notification_service.dto.NotificationPayload;
 import com.scarlxrd.notification_service.impl.IdempotencyService;
 import com.scarlxrd.notification_service.impl.NotificationSender;
@@ -18,9 +19,11 @@ public class NotificationService {
 
     private final NotificationSender telegramSender;
     private final IdempotencyService idempotencyService;
+    private final NotificationMetrics notificationMetrics;
 
     public void process(NotificationPayload payload) {
         if (payload.getCustomerEmail() == null && payload.getStatus() == null) {
+            notificationMetrics.ignored("missing_contact_and_status");
             log.info("Ignorando evento intermediário sem dados de contato");
             return;
         }
@@ -42,6 +45,7 @@ public class NotificationService {
         );
 
         if (duplicate) {
+            notificationMetrics.duplicated();
             log.warn("Evento duplicado ignorado: {}", key);
             return;
         }
@@ -70,6 +74,14 @@ public class NotificationService {
             sb.append("*Total:* ").append(total);
         }
 
-        telegramSender.send(sb.toString());
+        try {
+            telegramSender.send(sb.toString());
+
+            notificationMetrics.sent("telegram");
+
+        } catch (Exception ex) {
+            notificationMetrics.failed("telegram", "send_error");
+            throw ex;
+        }
     }
 }

@@ -1,5 +1,6 @@
 package com.scarlxrd.notification_service.config.rabbitmq;
 
+import com.scarlxrd.notification_service.config.metrics.RabbitEventMetrics;
 import com.scarlxrd.notification_service.dto.NotificationPayload;
 import com.scarlxrd.notification_service.service.NotificationService;
 import lombok.RequiredArgsConstructor;
@@ -14,12 +15,15 @@ import org.springframework.stereotype.Component;
 public class NotificationConsumer {
 
     private final NotificationService notificationService;
+    private final RabbitEventMetrics rabbitMetrics;
 
     @RabbitListener(
             queues = "notification.order.queue",
             containerFactory = "rabbitListenerContainerFactory"
     )
     public void receive(NotificationPayload payload) {
+
+        rabbitMetrics.consumed("notification_order");
 
         log.info("Evento recebido para notificação: {}", payload);
 
