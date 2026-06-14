@@ -1,5 +1,6 @@
 package com.scarlxrd.notification_service.service;
 
+import com.scarlxrd.notification_service.config.metrics.NotificationMetrics;
 import com.scarlxrd.notification_service.dto.NotificationPayload;
 import com.scarlxrd.notification_service.impl.IdempotencyService;
 import com.scarlxrd.notification_service.impl.NotificationSender;
@@ -18,6 +19,7 @@ import java.time.Duration;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,6 +32,9 @@ class NotificationServiceTest {
     @Mock
     private IdempotencyService idempotencyService;
 
+    @Mock
+    private NotificationMetrics notificationMetrics;
+
     @InjectMocks
     private NotificationService notificationService;
 
@@ -40,7 +45,7 @@ class NotificationServiceTest {
         payload = new NotificationPayload();
         payload.setOrderId(UUID.randomUUID());
 
-        lenient().when(idempotencyService.isDuplicate(any(), any(), any()))
+        lenient().when(idempotencyService.wasProcessed(any(), any(), any()))
                 .thenReturn(false);
     }
 
@@ -60,6 +65,13 @@ class NotificationServiceTest {
 
             // Then
             verify(telegramSender, never()).send(any());
+            verify(idempotencyService, never()).wasProcessed(any(), any(), any());
+            verify(idempotencyService, never()).markAsProcessed(any(), any());
+
+            verify(notificationMetrics).ignored("missing_contact_and_status");
+            verify(notificationMetrics, never()).sent(anyString());
+            verify(notificationMetrics, never()).duplicated();
+            verify(notificationMetrics, never()).failed(anyString(), anyString());
         }
 
         @Test
@@ -75,6 +87,10 @@ class NotificationServiceTest {
 
             // Then
             verify(telegramSender, never()).send(any());
+            verify(idempotencyService, never()).wasProcessed(any(), any(), any());
+            verify(idempotencyService, never()).markAsProcessed(any(), any());
+
+            verify(notificationMetrics).ignored("missing_contact_and_status");
         }
     }
 
@@ -101,6 +117,20 @@ class NotificationServiceTest {
             assertThat(message).contains("APROVADO");
             assertThat(message).contains("180.00");
             assertThat(message).contains(payload.getOrderId().toString());
+
+            verify(idempotencyService).wasProcessed(
+                    eq("payment"),
+                    eq(payload.getOrderId() + ":SUCCESS"),
+                    eq(Duration.ofMinutes(5))
+            );
+
+            verify(idempotencyService).markAsProcessed(
+                    eq("payment"),
+                    eq(payload.getOrderId() + ":SUCCESS")
+            );
+
+            verify(notificationMetrics).sent("telegram");
+            verify(notificationMetrics, never()).failed(anyString(), anyString());
         }
 
         @Test
@@ -118,13 +148,20 @@ class NotificationServiceTest {
             verify(telegramSender).send(captor.capture());
 
             assertThat(captor.getValue()).contains("FALHOU");
+
+            verify(idempotencyService).markAsProcessed(
+                    eq("payment"),
+                    eq(payload.getOrderId() + ":FAILED")
+            );
+
+            verify(notificationMetrics).sent("telegram");
         }
 
         @Test
         @DisplayName("Deve mostrar 0 quando amount for null")
         void shouldShowZeroWhenAmountIsNull() {
             // Given
-            payload.setStatus("ATUALIZAÇÃO DE PAGAMENTO");
+            payload.setStatus("SUCCESS");
             payload.setAmount(null);
 
             // When
@@ -134,7 +171,14 @@ class NotificationServiceTest {
             ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
             verify(telegramSender).send(captor.capture());
 
-            assertThat(captor.getValue()).contains("0");
+            assertThat(captor.getValue()).contains("R$ 0");
+
+            verify(idempotencyService).markAsProcessed(
+                    eq("payment"),
+                    eq(payload.getOrderId() + ":SUCCESS")
+            );
+
+            verify(notificationMetrics).sent("telegram");
         }
     }
 
@@ -161,6 +205,19 @@ class NotificationServiceTest {
             assertThat(message).contains("client@teste.com");
             assertThat(message).contains("R$ 360.00");
             assertThat(message).contains(payload.getOrderId().toString());
+
+            verify(idempotencyService).wasProcessed(
+                    eq("order"),
+                    eq(payload.getOrderId().toString()),
+                    eq(Duration.ofMinutes(5))
+            );
+
+            verify(idempotencyService).markAsProcessed(
+                    eq("order"),
+                    eq(payload.getOrderId().toString())
+            );
+
+            verify(notificationMetrics).sent("telegram");
         }
 
         @Test
@@ -178,6 +235,13 @@ class NotificationServiceTest {
             verify(telegramSender).send(captor.capture());
 
             assertThat(captor.getValue()).contains("Calculando...");
+
+            verify(idempotencyService).markAsProcessed(
+                    eq("order"),
+                    eq(payload.getOrderId().toString())
+            );
+
+            verify(notificationMetrics).sent("telegram");
         }
     }
 
@@ -188,15 +252,23 @@ class NotificationServiceTest {
         @Test
         @DisplayName("Deve ignorar evento duplicado")
         void shouldIgnoreDuplicateEvent() {
+            // Given
             payload.setStatus("SUCCESS");
             payload.setAmount(new BigDecimal("100"));
 
-            when(idempotencyService.isDuplicate(any(), any(), any()))
+            when(idempotencyService.wasProcessed(any(), any(), any()))
                     .thenReturn(true);
 
+            // When
             notificationService.process(payload);
 
+            // Then
             verify(telegramSender, never()).send(any());
+            verify(idempotencyService, never()).markAsProcessed(any(), any());
+
+            verify(notificationMetrics).duplicated();
+            verify(notificationMetrics, never()).sent(anyString());
+            verify(notificationMetrics, never()).failed(anyString(), anyString());
         }
 
         @Test
@@ -210,7 +282,7 @@ class NotificationServiceTest {
             notificationService.process(payload);
 
             // Then
-            verify(idempotencyService).isDuplicate(
+            verify(idempotencyService).wasProcessed(
                     eq("payment"),
                     eq(payload.getOrderId() + ":SUCCESS"),
                     any()
@@ -227,7 +299,7 @@ class NotificationServiceTest {
             notificationService.process(payload);
 
             // Then
-            verify(idempotencyService).isDuplicate(
+            verify(idempotencyService).wasProcessed(
                     eq("order"),
                     eq(payload.getOrderId().toString()),
                     any()
@@ -244,11 +316,59 @@ class NotificationServiceTest {
             notificationService.process(payload);
 
             // Then
-            verify(idempotencyService).isDuplicate(
+            verify(idempotencyService).wasProcessed(
                     any(),
                     any(),
                     eq(Duration.ofMinutes(5))
             );
+        }
+
+        @Test
+        @DisplayName("Deve marcar como processado após enviar notificação")
+        void shouldMarkAsProcessedAfterSendingNotification() {
+            // Given
+            payload.setStatus("SUCCESS");
+            payload.setAmount(new BigDecimal("180.00"));
+
+            // When
+            notificationService.process(payload);
+
+            // Then
+            verify(telegramSender).send(anyString());
+
+            verify(idempotencyService).markAsProcessed(
+                    eq("payment"),
+                    eq(payload.getOrderId() + ":SUCCESS")
+            );
+        }
+    }
+
+    @Nested
+    @DisplayName("Falha no envio da notificação")
+    class SendFailureTests {
+
+        @Test
+        @DisplayName("Deve lançar exceção quando telegramSender falhar")
+        void shouldThrowExceptionWhenTelegramSenderFails() {
+            // Given
+            payload.setStatus("SUCCESS");
+            payload.setAmount(new BigDecimal("180.00"));
+
+            RuntimeException exception = new RuntimeException("Telegram unavailable");
+
+            doThrow(exception)
+                    .when(telegramSender)
+                    .send(anyString());
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.process(payload))
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessage("Telegram unavailable");
+
+            verify(notificationMetrics).failed("telegram", "send_error");
+            verify(notificationMetrics, never()).sent(anyString());
+
+            verify(idempotencyService, never()).markAsProcessed(any(), any());
         }
     }
 }
