@@ -40,16 +40,17 @@ public class TelegramSender implements NotificationSender {
                 "parse_mode", "Markdown"
         );
 
-        try {
-            restTemplate.postForObject(url, body, String.class);
-            log.info("Notificação enviada para Telegram com sucesso");
-        } catch (Exception e) {
-            log.error("Erro ao enviar para o Telegram: {}", e.getMessage());
-            throw e;
-        }
+        restTemplate.postForObject(url, body, String.class);
+        log.info("Notificação enviada para Telegram com sucesso");
     }
     @Recover
     public void recover(Exception e, String message) {
-        log.error("Falhou após 3 tentativas para mensagem: {}", message);
+        log.error(
+                "Falhou ao enviar notificação para Telegram após todas as tentativas. message={}, error={}",
+                message,
+                e.getMessage(),
+                e
+        );
+        throw new IllegalStateException("Falha final ao enviar notificação para Telegram", e);
     }
 }

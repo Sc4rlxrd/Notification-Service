@@ -17,22 +17,30 @@ public class InMemoryIdempotencyService implements IdempotencyService {
     }
 
     @Override
-    public boolean isDuplicate(String context, Object key, Duration ttl) {
+    public boolean wasProcessed(String context, Object key, Duration ttl) {
         String finalKey = buildKey(context, key);
         long now = System.currentTimeMillis();
 
         cleanup(now, ttl);
 
-        Long existing = processed.putIfAbsent(finalKey, now);
+        Long existing = processed.get(finalKey);
 
-        if (existing == null) return false;
+        if (existing == null) {
+            return false;
+        }
 
         if (now - existing > ttl.toMillis()) {
-            processed.put(finalKey, now);
+            processed.remove(finalKey);
             return false;
         }
 
         return true;
+    }
+
+    @Override
+    public void markAsProcessed(String context, Object key) {
+        String finalKey = buildKey(context, key);
+        processed.put(finalKey, System.currentTimeMillis());
     }
 
     private void cleanup(long now, Duration ttl) {
